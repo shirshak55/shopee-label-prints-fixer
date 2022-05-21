@@ -5,6 +5,7 @@ import pop from "node-poppler";
 import os from "os";
 import path from "path";
 import PDFMerger from "pdf-merger-js";
+import scanner from "qr-scanner-cli";
 import xlsx from "xlsx";
 import { logger } from "./log.js";
 export function readXlsx(path) {
@@ -84,21 +85,52 @@ export async function makePdf(vendor, inputLabelDirectory, outputDir, indexPath,
         for (let index in pdfBuffers) {
             let pth = path.join(tempDir, `tmp.pdf`);
             fs.writeFileSync(pth, pdfBuffers[index]);
-            let pdftext = await poppler.pdfToText(pth).catch((e) => undefined);
-            await fsp.rm(pth).catch((e) => undefined);
-            logger.info(`Searching Orders in PDF ${index} Total: ${pdfBuffers.length}`);
-            for (let di in idata) {
-                let data = idata[di];
-                if (pdftext &&
-                    pdftext.includes(data.order_id) &&
-                    !pdfIndexedBuffers.find((v) => v.index === data.index)) {
-                    output.stats += 1;
-                    logger.info("Found it", data.index);
-                    pdfIndexedBuffers.push({
-                        index: data.index,
-                        type: data.type,
-                        buffer: pdfBuffers[index],
+            if (vendor === Vendor.Family) {
+                logger.info(`Searching Orders in PDF ${index} Total: ${pdfBuffers.length}`);
+                for (let di in idata) {
+                    let tmpImg = path.join(tempDir, "temp.png");
+                    await poppler.pdfToCairo(pth, path.join(tempDir, "temp"), {
+                        pngFile: true,
+                        singleFile: true,
                     });
+                    let qrText = await scanner.scanFromFile(tmpImg).catch((e) => undefined);
+                    if (!qrText) {
+                        console.log("Qr code not detected");
+                        continue;
+                    }
+                    await fsp.rm(tmpImg);
+                    let data = idata[di];
+                    if (qrText &&
+                        qrText.includes(data.order_id) &&
+                        !pdfIndexedBuffers.find((v) => v.index === data.index)) {
+                        output.stats += 1;
+                        logger.info("Found it", data.index);
+                        pdfIndexedBuffers.push({
+                            index: data.index,
+                            type: data.type,
+                            buffer: pdfBuffers[index],
+                        });
+                    }
+                }
+            }
+            else {
+                // this is not family
+                let pdftext = await poppler.pdfToText(pth).catch((e) => undefined);
+                await fsp.rm(pth).catch((e) => undefined);
+                logger.info(`Searching Orders in PDF ${index} Total: ${pdfBuffers.length}`);
+                for (let di in idata) {
+                    let data = idata[di];
+                    if (pdftext &&
+                        pdftext.includes(data.order_id) &&
+                        !pdfIndexedBuffers.find((v) => v.index === data.index)) {
+                        output.stats += 1;
+                        logger.info("Found it", data.index);
+                        pdfIndexedBuffers.push({
+                            index: data.index,
+                            type: data.type,
+                            buffer: pdfBuffers[index],
+                        });
+                    }
                 }
             }
         }
@@ -147,7 +179,7 @@ export async function makePdf(vendor, inputLabelDirectory, outputDir, indexPath,
         logger.info("Error on pdf printer", e);
     }
     finally {
-        await fsp.rm(tempDir, { recursive: true }).catch((e) => undefined);
+        //  await fsp.rm(tempDir, { recursive: true }).catch((e) => undefined)
     }
     logger.info("Completed");
     return output;
@@ -169,7 +201,18 @@ async function scissor(four_pdf_in_page, type) {
         }
     }
     else if (type === "Family") {
-        return [];
+        let four = [];
+        for (let file of four_pdf_in_page) {
+            if (file.file_name === "small-pdf-1.pdf") {
+                await scisoorInner(file.buf, four, 55, 47, 490, 765);
+            }
+            else {
+                await scisoorInner(file.buf, four, 55, 47, 490, 765);
+            }
+        }
+        for (let filei in four) {
+            four_pdf_in_page[filei].buf = four[filei];
+        }
     }
     for (let fileI in four_pdf_in_page) {
         let file = four_pdf_in_page[fileI];
