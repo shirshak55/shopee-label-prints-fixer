@@ -87,18 +87,18 @@ export async function makePdf(vendor, inputLabelDirectory, outputDir, indexPath,
             fs.writeFileSync(pth, pdfBuffers[index]);
             if (vendor === Vendor.Family) {
                 logger.info(`Searching Orders in PDF ${index} Total: ${pdfBuffers.length}`);
+                let tmpImg = path.join(tempDir, "temp.png");
+                await poppler.pdfToCairo(pth, path.join(tempDir, "temp"), {
+                    pngFile: true,
+                    singleFile: true,
+                });
+                let qrText = await scanner.scanFromFile(tmpImg).catch((e) => undefined);
+                if (!qrText) {
+                    console.log("Qr code not detected");
+                    continue;
+                }
+                await fsp.rm(tmpImg);
                 for (let di in idata) {
-                    let tmpImg = path.join(tempDir, "temp.png");
-                    await poppler.pdfToCairo(pth, path.join(tempDir, "temp"), {
-                        pngFile: true,
-                        singleFile: true,
-                    });
-                    let qrText = await scanner.scanFromFile(tmpImg).catch((e) => undefined);
-                    if (!qrText) {
-                        console.log("Qr code not detected");
-                        continue;
-                    }
-                    await fsp.rm(tmpImg);
                     let data = idata[di];
                     if (qrText &&
                         qrText.includes(data.order_id) &&
