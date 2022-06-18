@@ -5,9 +5,10 @@ import pop from "node-poppler";
 import os from "os";
 import path from "path";
 import PDFMerger from "pdf-merger-js";
-import scanner from "qr-scanner-cli";
 import xlsx from "xlsx";
 import { logger } from "./log.js";
+import { PNG } from "pngjs";
+import scanner from "jsqr";
 export function readXlsx(path) {
     const table = xlsx.read(fs.readFileSync(path), { type: "buffer" });
     var sheet_name_list = table.SheetNames;
@@ -92,7 +93,11 @@ export async function makePdf(vendor, inputLabelDirectory, outputDir, indexPath,
                     pngFile: true,
                     singleFile: true,
                 });
-                let qrText = await scanner.scanFromFile(tmpImg).catch((e) => undefined);
+                const buffer = fs.readFileSync(tmpImg);
+                const png = PNG.sync.read(buffer);
+                const code = scanner(Uint8ClampedArray.from(png.data), png.width, png.height);
+                const qrText = code?.data;
+                console.log("QR CODE IMAGE PATH", tmpImg, qrText);
                 if (!qrText) {
                     console.log("Qr code not detected");
                     continue;
