@@ -2,8 +2,7 @@
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
-#![feature(path_try_exists)]
-
+#![feature(fs_try_exists)]
 use std::process::Command;
 use std::{os::windows::process::CommandExt, path::PathBuf, process::Stdio};
 
